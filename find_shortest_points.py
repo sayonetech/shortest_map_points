@@ -88,8 +88,7 @@ def prepare_sferiche_pois_for_route(sferiche_pois):
     return ';'.join(points_str_list)
 
 
-
-def get_route_coordinates():
+def get_sferiche_selected_points():
     route_api = "https://api.mapbox.com/directions/v5/mapbox/driving/"\
             "%s?"\
             "alternatives=true&geometries=geojson&language=en&overview=full&steps=true&"\
@@ -112,10 +111,10 @@ def get_route_coordinates():
 
 
 sferiche_pois = get_sferiche_pois()
-all_result = get_route_coordinates() + sferiche_pois
+all_result = get_sferiche_selected_points() + sferiche_pois
 
-all_reult_dict = {
-    "spheriche":all_result
+all_result_dict = {
+    "spheriche": all_result
 }
 
-print(json.dumps(all_reult_dict))
+print(json.dumps(all_result_dict))
