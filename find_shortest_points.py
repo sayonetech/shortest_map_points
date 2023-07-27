@@ -16,6 +16,7 @@ FETCH_FROM_FILE = True if os.getenv('FETCH_FROM_FILE') == 'True' else False
 SFERICHE_URL = "https://dev.phygital.bbsitalia.com/sites/default/files/sferiche/sferiche.json"
 POI_URL = "https://dev.phygital.bbsitalia.com/poi-simplified.json"
 
+
 def get_data_from_url(url):
     print('Loading from URL......: %s' % url)
     r = requests.get(url)
@@ -43,7 +44,7 @@ def closest_node_and_distance(node, nodes):
     # Format node = (long, lat)
     distances = distance.cdist([node], nodes)
     closest_index = distances.argmin()
-    return (nodes[closest_index], distances[0][closest_index])
+    return nodes[closest_index], distances[0][closest_index]
 
 
 if FETCH_FROM_FILE:
@@ -89,7 +90,7 @@ def prepare_sferiche_pois_for_route(sferiche_pois):
 
 
 def get_sferiche_selected_points():
-    route_api = "https://api.mapbox.com/directions/v5/mapbox/driving/"\
+    route_api = "https://api.mapbox.com/directions/v5/mapbox/walking/"\
             "%s?"\
             "alternatives=true&geometries=geojson&language=en&overview=full&steps=true&"\
             "access_token=%s" % (prepare_sferiche_pois_for_route(sferiche_pois), MAPBOX_ACCESS_TOKEN)
@@ -98,6 +99,7 @@ def get_sferiche_selected_points():
 
     routes = data['routes'][0]
     sferiche_selected = []
+    _coordinates = []
     for coordinate in routes['geometry']['coordinates']:
         long, lat = coordinate[0], coordinate[1]
         point, dist = closest_node_and_distance((long, lat), all_sferiche)
@@ -106,12 +108,14 @@ def get_sferiche_selected_points():
             "X": point[0],
             "Y": point[1],
         })
-
+        _coordinates.append([long, lat])
     return sferiche_selected
 
 
 sferiche_pois = get_sferiche_pois()
-all_result = get_sferiche_selected_points() + sferiche_pois
+
+# For now it assumes 2 points as input
+all_result = sferiche_pois[:1] + get_sferiche_selected_points() + sferiche_pois[1:]
 
 all_result_dict = {
     "spheriche": all_result
