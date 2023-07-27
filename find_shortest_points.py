@@ -1,20 +1,7 @@
-import os
-import json
 import requests
-
+from shapely.geometry import Point
+import geopandas as gpd
 from scipy.spatial import distance
-from dotenv import load_dotenv
-
-load_dotenv()
-
-
-# Long - X(small), Lat - Y(Big)
-
-MAPBOX_ACCESS_TOKEN = os.getenv('MAPBOX_ACCESS_TOKEN')
-FETCH_FROM_FILE = True if os.getenv('FETCH_FROM_FILE') == 'True' else False
-
-SFERICHE_URL = "https://dev.phygital.bbsitalia.com/sites/default/files/sferiche/sferiche.json"
-POI_URL = "https://dev.phygital.bbsitalia.com/poi-simplified.json"
 
 
 def get_data_from_url(url):
@@ -27,46 +14,27 @@ def get_data_from_url(url):
     data = r.json()
     return data
 
-
-# Load all sferiche points
-if FETCH_FROM_FILE:
-    with open('data/sferiche.json', 'r') as f:
-      sferiche_data = json.load(f)
-else:
-    sferiche_data = get_data_from_url(SFERICHE_URL)
-
-all_sferiche = []
-for sferiche in sferiche_data['sferiche']:
-    all_sferiche.append([float(sferiche['X']),float(sferiche['Y'])])
-
-
 def closest_node_and_distance(node, nodes):
     # Format node = (long, lat)
     distances = distance.cdist([node], nodes)
     closest_index = distances.argmin()
-    return nodes[closest_index], distances[0][closest_index]
+    closest_node = nodes[closest_index]
+    lon1, lat1, lon2, lat2 = *node, *closest_node
+
+    distance_in_m = get_distance_geopands(lat1, lon1, lat2, lon2)
+    return closest_node, distance_in_m
 
 
-if FETCH_FROM_FILE:
-    input_data = {
-        "Pois": [
-            {
-                "Id_poi": 1,
-                "Lat" : "44.404096",
-                "Long": "8.93136"
-            },
-            {
-                "Id_poi": 2,
-                "Lat" : "44.403877",
-                "Long": "8.933102"
-            }
-        ]
-    }
-else:
-    input_data = get_data_from_url(POI_URL)
+def get_distance_geopands(lat1, lon1, lat2, lon2):
+    pnt1 = Point(lon1, lat1)
+    pnt2 = Point(lon2, lat2)
+    points_df = gpd.GeoDataFrame({'geometry': [pnt1, pnt2]}, crs='EPSG:4326')
+    points_df = points_df.to_crs('EPSG:5234')
+    points_df2 = points_df.shift()  # We shift the dataframe by 1 to align pnt1 with pnt2
+    return points_df.distance(points_df2)[1]
 
 
-def get_sferiche_pois():
+def get_sferiche_pois(input_data, all_sferiche):
     sferiche_pois = []
     for point_data in input_data['Pois']:
         lat, long = float(point_data['Lat']), float(point_data['Long'])
@@ -89,36 +57,25 @@ def prepare_sferiche_pois_for_route(sferiche_pois):
     return ';'.join(points_str_list)
 
 
-def get_sferiche_selected_points():
+def get_sferiche_selected_points(sferiche_pois, all_sferiche, mapbox_token, distance_threshhold):
     route_api = "https://api.mapbox.com/directions/v5/mapbox/walking/"\
             "%s?"\
             "alternatives=true&geometries=geojson&language=en&overview=full&steps=true&"\
-            "access_token=%s" % (prepare_sferiche_pois_for_route(sferiche_pois), MAPBOX_ACCESS_TOKEN)
+            "access_token=%s" % (prepare_sferiche_pois_for_route(sferiche_pois), mapbox_token)
 
     data = get_data_from_url(route_api)
 
     routes = data['routes'][0]
     sferiche_selected = []
-    _coordinates = []
+    # _coordinates = []
     for coordinate in routes['geometry']['coordinates']:
         long, lat = coordinate[0], coordinate[1]
         point, dist = closest_node_and_distance((long, lat), all_sferiche)
-        sferiche_selected.append({
-            "id-poi": None,
-            "X": point[0],
-            "Y": point[1],
-        })
-        _coordinates.append([long, lat])
+        if dist < distance_threshhold:  # Will not include in the sferiche list if distance higher
+            sferiche_selected.append({
+                "id-poi": None,
+                "X": point[0],
+                "Y": point[1],
+            })
+        # _coordinates.append([long, lat])
     return sferiche_selected
-
-
-sferiche_pois = get_sferiche_pois()
-
-# For now it assumes 2 points as input
-all_result = sferiche_pois[:1] + get_sferiche_selected_points() + sferiche_pois[1:]
-
-all_result_dict = {
-    "spheriche": all_result
-}
-
-print(json.dumps(all_result_dict))

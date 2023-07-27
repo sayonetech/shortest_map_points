@@ -17,5 +17,3 @@ Note: This uses MapBox API to fetch the route information.
 - Finding the sferiche_pois
 - Based on sferiche_poi fetch route information from mapbox API
 - Identify nearest sferiche points from the coodinates of the route.
-
-TODO: Limiting sferiche points based on distance threshold. 
